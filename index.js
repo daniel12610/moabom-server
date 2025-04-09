@@ -16,9 +16,22 @@ app.get("/", (req, res) => {
 
 app.post("/upload", upload.single("file"), (req, res) => {
   if (!req.file) return res.status(400).json({ message: "No file uploaded" });
-  res.json({ message: `${req.file.originalname} uploaded successfully!` });
+
+  const fileUrl = `/uploads/${req.file.filename}`;
+  res.json({ 
+    message: `${req.file.originalname} uploaded successfully!`,
+    fileUrl,
+    originalName: req.file.originalname
+  });
+
+  io.emit("chatMessage", {
+    username: "Server",
+    text: `uploaded file: ${req.file.originalname}`,
+    fileUrl
+  });
 });
 
+app.use("/uploads", express.static("uploads"));
 const io = new Server(server, {
   cors: {
     origin: "*",
