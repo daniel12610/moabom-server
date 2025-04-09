@@ -1,7 +1,10 @@
+const { exec } = require("child_process");
 const express = require("express");
 const http = require("http");
 const cors = require("cors");
 const { Server } = require("socket.io");
+const path = require("path");
+const fs = require("fs");
 
 const app = express();
 const server = http.createServer(app);
@@ -14,35 +17,44 @@ app.get("/", (req, res) => {
   res.send("MOABM Server is running.");
 });
 
-const path = require("path");
-const fs = require("fs");
-
 app.post("/upload", upload.single("file"), (req, res) => {
   if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
-  const ext = path.extname(req.file.originalname); // .jpg, .png, etc.
+  const ext = path.extname(req.file.originalname);
   const newFileName = `${req.file.filename}${ext}`;
   const oldPath = req.file.path;
   const newPath = path.join("uploads", newFileName);
 
-  fs.renameSync(oldPath, newPath); // renombra con extensión
+  fs.renameSync(oldPath, newPath);
 
-  const fileUrl = `/uploads/${newFileName}`;
+  const fileUrl = `/uploads/colorized_${newFileName}`;
+  const colorizedPath = path.join("uploads", `colorized_${newFileName}`);
 
-  res.json({
-    message: `${req.file.originalname} uploaded successfully!`,
-    fileUrl,
-    originalName: req.file.originalname,
-  });
+  //call python
+  const command = `python3 milkify.py "${newPath}" "${colorizedPath}"`;
+  exec(command, (error, stdout, stderr) => {
+    if (error) {
+      console.error(`Error running colorize.py:`, error);
+      return res.status(500).json({ message: "Image processing failed" });
+    }
 
-  io.emit("chatMessage", {
-    username: "Server",
-    text: `uploaded file: ${req.file.originalname}`,
-    fileUrl,
+    //returns edited img
+    res.json({
+      message: `${req.file.originalname} uploaded and colorized successfully!`,
+      fileUrl,
+      originalName: req.file.originalname,
+    });
+
+    io.emit("chatMessage", {
+      username: "Server",
+      text: `uploaded file: ${req.file.originalname}`,
+      fileUrl,
+    });
   });
 });
 
 app.use("/uploads", express.static("uploads"));
+
 const io = new Server(server, {
   cors: {
     origin: "*",
