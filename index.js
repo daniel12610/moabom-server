@@ -34,13 +34,13 @@ app.post("/upload", upload.single("file"), (req, res) => {
   const command = `python3 milkify.py "${newPath}" "${colorizedPath}"`;
   exec(command, (error, stdout, stderr) => {
     if (error) {
-      console.error(`Error running colorize.py:`, error);
+      console.error(`Error running milkify.py:`, error);
       return res.status(500).json({ message: "Image processing failed" });
     }
 
     //returns edited img
     res.json({
-      message: `${req.file.originalname} uploaded and colorized successfully!`,
+      message: `${req.file.originalname} uploaded and milkified successfully!`,
       fileUrl,
       originalName: req.file.originalname,
     });
