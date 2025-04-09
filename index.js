@@ -40,7 +40,7 @@ app.post("/upload", upload.single("file"), (req, res) => {
 
     //returns edited img
     res.json({
-      message: `${req.file.originalname} uploaded and milkified successfully!`,
+      message: `uploaded ${req.file.originalname} successfully!`,
       fileUrl,
       originalName: req.file.originalname,
     });

@@ -39,7 +39,7 @@ def process_image(filepath, output_path):
 
     # Save the result in RGB format
     colorized_rgb = cv2.cvtColor(colorized, cv2.COLOR_BGR2RGB)
-    cv2.imwrite(output_path, cv2.cvtColor(colorized_rgb, cv2.COLOR_RGB2BGR))
+    cv2.imwrite(output_path, colorized_rgb)
 
 
 # CLI usage: python colorize.py input_path output_path
