@@ -7,7 +7,7 @@ def process_image(filepath, output_path):
     if img is None:
         raise ValueError("Image not found or path is invalid")
 
-    scale = 0.5
+    scale = 0.4
     h, w = int(img.shape[0] * scale), int(img.shape[1] * scale)
     temp = cv2.resize(img, (w, h), interpolation=cv2.INTER_LINEAR)
     pixelated = cv2.resize(temp, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_NEAREST)
