@@ -6,12 +6,17 @@ const { Server } = require("socket.io");
 const app = express();
 const server = http.createServer(app);
 const users = {};
-
+const multer = require("multer");
+const upload = multer({ dest: "uploads/" });
 app.use(cors());
-
 
 app.get("/", (req, res) => {
   res.send("MOABM Server is running.");
+});
+
+app.post("/upload", upload.single("file"), (req, res) => {
+  if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+  res.json({ message: `${req.file.originalname} uploaded successfully!` });
 });
 
 const io = new Server(server, {
