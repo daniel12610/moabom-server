@@ -1,4 +1,4 @@
-const { execFile } = require("child_process"); // ✅ FIX 1: execFile en lugar de exec
+const { execFile } = require("child_process");
 const express = require("express");
 const http = require("http");
 const cors = require("cors");
@@ -12,8 +12,17 @@ const server = http.createServer(app);
 const users = {};
 const upload = multer({ dest: "uploads/" });
 
-// ✅ FIX 2: extensiones permitidas
 const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
+
+// ✅ FIX CORS: orígenes desde variable de entorno + localhost para desarrollo
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "https://moabom-my-pc.vercel.app",
+  ...(process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(",")
+    : []),
+];
 
 app.use(cors());
 
@@ -26,9 +35,8 @@ app.post("/upload", upload.single("file"), (req, res) => {
 
   const ext = path.extname(req.file.originalname).toLowerCase();
 
-  // ✅ FIX 2: validar que sea imagen antes de llamar Python
   if (!ALLOWED_EXTENSIONS.includes(ext)) {
-    fs.unlinkSync(req.file.path); // borra el archivo rechazado
+    fs.unlinkSync(req.file.path);
     return res.status(400).json({ message: "Solo se permiten imágenes (jpg, jpeg, png, webp)" });
   }
 
@@ -40,9 +48,7 @@ app.post("/upload", upload.single("file"), (req, res) => {
 
   fs.renameSync(oldPath, newPath);
 
-  // ✅ FIX 1: execFile — evita command injection
   execFile("python3", ["milkify.py", newPath, colorizedPath], (error, stdout, stderr) => {
-    // ✅ FIX 3: borra el original después de procesar
     if (fs.existsSync(newPath)) fs.unlinkSync(newPath);
 
     if (error) {
@@ -68,7 +74,7 @@ app.use("/uploads", express.static("uploads"));
 
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: allowedOrigins, // ✅ solo permite orígenes definidos
     methods: ["GET", "POST"],
   },
 });
@@ -83,7 +89,6 @@ io.on("connection", (socket) => {
 
   socket.on("chatMessage", (data) => {
     console.log("Received message:", data);
-    // ✅ FIX 4: io.emit en lugar de broadcast — el emisor también recibe el mensaje
     io.emit("chatMessage", data);
   });
 
@@ -95,11 +100,12 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     console.log(`User disconnected: ${socket.id}`);
-    delete users[socket.id]; // ✅ limpieza correcta del usuario
+    delete users[socket.id];
   });
 });
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`MOABM Server running on port ${PORT}`);
+  console.log(`Allowed origins:`, allowedOrigins);
 });
