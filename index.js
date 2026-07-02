@@ -1,16 +1,20 @@
-const { exec } = require("child_process");
+const { execFile } = require("child_process"); // ✅ FIX 1: execFile en lugar de exec
 const express = require("express");
 const http = require("http");
 const cors = require("cors");
 const { Server } = require("socket.io");
 const path = require("path");
 const fs = require("fs");
+const multer = require("multer");
 
 const app = express();
 const server = http.createServer(app);
 const users = {};
-const multer = require("multer");
 const upload = multer({ dest: "uploads/" });
+
+// ✅ FIX 2: extensiones permitidas
+const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
+
 app.use(cors());
 
 app.get("/", (req, res) => {
@@ -20,25 +24,32 @@ app.get("/", (req, res) => {
 app.post("/upload", upload.single("file"), (req, res) => {
   if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
-  const ext = path.extname(req.file.originalname);
+  const ext = path.extname(req.file.originalname).toLowerCase();
+
+  // ✅ FIX 2: validar que sea imagen antes de llamar Python
+  if (!ALLOWED_EXTENSIONS.includes(ext)) {
+    fs.unlinkSync(req.file.path); // borra el archivo rechazado
+    return res.status(400).json({ message: "Solo se permiten imágenes (jpg, jpeg, png, webp)" });
+  }
+
   const newFileName = `${req.file.filename}${ext}`;
   const oldPath = req.file.path;
   const newPath = path.join("uploads", newFileName);
+  const colorizedPath = path.join("uploads", `colorized_${newFileName}`);
+  const fileUrl = `/uploads/colorized_${newFileName}`;
 
   fs.renameSync(oldPath, newPath);
 
-  const fileUrl = `/uploads/colorized_${newFileName}`;
-  const colorizedPath = path.join("uploads", `colorized_${newFileName}`);
+  // ✅ FIX 1: execFile — evita command injection
+  execFile("python3", ["milkify.py", newPath, colorizedPath], (error, stdout, stderr) => {
+    // ✅ FIX 3: borra el original después de procesar
+    if (fs.existsSync(newPath)) fs.unlinkSync(newPath);
 
-  //call python
-  const command = `python3 milkify.py "${newPath}" "${colorizedPath}"`;
-  exec(command, (error, stdout, stderr) => {
     if (error) {
-      console.error(`Error running milkify.py:`, error);
+      console.error("Error running milkify.py:", error);
       return res.status(500).json({ message: "Image processing failed" });
     }
 
-    //returns edited img
     res.json({
       message: `uploaded ${req.file.originalname} successfully!`,
       fileUrl,
@@ -72,7 +83,8 @@ io.on("connection", (socket) => {
 
   socket.on("chatMessage", (data) => {
     console.log("Received message:", data);
-    socket.broadcast.emit("chatMessage", data);
+    // ✅ FIX 4: io.emit en lugar de broadcast — el emisor también recibe el mensaje
+    io.emit("chatMessage", data);
   });
 
   socket.on("getUserList", () => {
@@ -83,7 +95,7 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     console.log(`User disconnected: ${socket.id}`);
-    delete users[socket.id];
+    delete users[socket.id]; // ✅ limpieza correcta del usuario
   });
 });
 
