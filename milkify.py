@@ -2,10 +2,21 @@ import cv2
 import numpy as np
 import sys
 
+# ✅ dimensión máxima — reduce memoria sin afectar el efecto visual
+MAX_DIMENSION = 800
+
 def process_image(filepath, output_path):
     img = cv2.imread(filepath)
     if img is None:
         raise ValueError("Image not found or path is invalid")
+
+    # ✅ redimensiona si la imagen es muy grande antes de procesar
+    h, w = img.shape[:2]
+    if max(h, w) > MAX_DIMENSION:
+        scale = MAX_DIMENSION / max(h, w)
+        new_w = int(w * scale)
+        new_h = int(h * scale)
+        img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
 
     scale = 0.4
     h, w = int(img.shape[0] * scale), int(img.shape[1] * scale)
@@ -37,12 +48,9 @@ def process_image(filepath, output_path):
         mask = (brightness >= low) & (brightness < high)
         colorized[mask] = color
 
-    # Save the result in RGB format
     colorized_rgb = cv2.cvtColor(colorized, cv2.COLOR_BGR2RGB)
     cv2.imwrite(output_path, colorized_rgb)
 
-
-# CLI usage: python colorize.py input_path output_path
 if __name__ == "__main__":
     if len(sys.argv) < 3:
         print("how to use: python milkify.py input_path output_path")

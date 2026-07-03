@@ -10,11 +10,15 @@ const multer = require("multer");
 const app = express();
 const server = http.createServer(app);
 const users = {};
-const upload = multer({ dest: "uploads/" });
+
+// ✅ límite de 2MB por archivo
+const upload = multer({
+  dest: "uploads/",
+  limits: { fileSize: 2 * 1024 * 1024 },
+});
 
 const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
 
-// ✅ FIX CORS: orígenes desde variable de entorno + localhost para desarrollo
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
@@ -30,7 +34,37 @@ app.get("/", (req, res) => {
   res.send("MOABM Server is running.");
 });
 
+// ✅ limpieza periódica: borra archivos en uploads/ con más de 5 minutos
+const cleanUploads = () => {
+  const uploadsDir = "uploads/";
+  if (!fs.existsSync(uploadsDir)) return;
+
+  const now = Date.now();
+  const MAX_AGE_MS = 5 * 60 * 1000; // 5 minutos
+
+  fs.readdirSync(uploadsDir).forEach((file) => {
+    const filePath = path.join(uploadsDir, file);
+    try {
+      const stat = fs.statSync(filePath);
+      if (now - stat.mtimeMs > MAX_AGE_MS) {
+        fs.unlinkSync(filePath);
+        console.log(`Cleaned up old file: ${file}`);
+      }
+    } catch (err) {
+      // archivo ya borrado, ignorar
+    }
+  });
+};
+
+// corre la limpieza cada 5 minutos
+setInterval(cleanUploads, 5 * 60 * 1000);
+
 app.post("/upload", upload.single("file"), (req, res) => {
+  // ✅ error de multer por tamaño
+  if (req.fileValidationError || (!req.file && !res.headersSent)) {
+    return res.status(400).json({ message: "No file uploaded" });
+  }
+
   if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
   const ext = path.extname(req.file.originalname).toLowerCase();
@@ -49,10 +83,12 @@ app.post("/upload", upload.single("file"), (req, res) => {
   fs.renameSync(oldPath, newPath);
 
   execFile("python3", ["milkify.py", newPath, colorizedPath], (error, stdout, stderr) => {
+    // borra el original siempre
     if (fs.existsSync(newPath)) fs.unlinkSync(newPath);
 
     if (error) {
       console.error("Error running milkify.py:", error);
+      if (fs.existsSync(colorizedPath)) fs.unlinkSync(colorizedPath);
       return res.status(500).json({ message: "Image processing failed" });
     }
 
@@ -67,14 +103,31 @@ app.post("/upload", upload.single("file"), (req, res) => {
       text: `uploaded file: ${req.file.originalname}`,
       fileUrl,
     });
+
+    // ✅ borra la imagen colorized después de 2 minutos
+    // suficiente para que todos los clientes la carguen
+    setTimeout(() => {
+      if (fs.existsSync(colorizedPath)) {
+        fs.unlinkSync(colorizedPath);
+        console.log(`Deleted colorized file: colorized_${newFileName}`);
+      }
+    }, 2 * 60 * 1000);
   });
+});
+
+// ✅ manejo de error de multer por tamaño
+app.use((err, req, res, next) => {
+  if (err.code === "LIMIT_FILE_SIZE") {
+    return res.status(400).json({ message: "El archivo no puede superar 2MB" });
+  }
+  next(err);
 });
 
 app.use("/uploads", express.static("uploads"));
 
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins, // ✅ solo permite orígenes definidos
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
   },
 });
